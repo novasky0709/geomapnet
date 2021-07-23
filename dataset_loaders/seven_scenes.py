@@ -6,6 +6,10 @@ Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses
 """
 pytorch data loader for the 7-scenes dataset
 """
+
+"""
+Add code annotation at 0723
+"""
 import os
 import os.path as osp
 import numpy as np
