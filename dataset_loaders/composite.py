@@ -6,6 +6,9 @@ Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses
 """
 Composite data-loaders derived from class specific data loaders
 """
+"""
+Add annotation at 0723
+"""
 import torch
 from torch.utils import data
 from torch.autograd import Variable
@@ -43,6 +46,9 @@ class MF(data.Dataset):
     if dataset == '7Scenes':
       from seven_scenes import SevenScenes
       self.dset = SevenScenes(*args, real=self.real, **kwargs)
+      """
+      We dont use vos and real in MapNet 
+      """
       if self.include_vos and self.real:
         self.gt_dset = SevenScenes(*args, skip_images=True, real=False,
           **kwargs)
@@ -58,17 +64,64 @@ class MF(data.Dataset):
     self.L = self.steps * self.skip
 
   def get_indices(self, index):
+   """
+   np.random.randint(low,high,size),在[low,high)中随机生成size个随机数
+   skip:I1与I2之间跳的步数
+   step:一共跳几次（一共取几张图片）
+   skips 数组表示每次跳的步数
+ 
+   variable_skip: bool 
+   如果variable_skip = False,将生成规则的skips：
+   [5,5,5,5,5,5,5,5,...]
+   如果variable_skip = True，skip不再是一个常量：
+   [1,5,4,2,1,3,3,4,...]
+   """
     if self.variable_skip:
       skips = np.random.randint(1, high=self.skip+1, size=self.steps-1)
     else:
       skips = self.skip * np.ones(self.steps-1)
+    """
+    cumsum():累加函数
+    >>>a = np.array([[1,2,3], [4,5,6]])
+    >>>np.cumsum(a)
+        array([ 1,  3,  6, 10, 15, 21])
+        
+        
+    np.insert(skips, 0, 0)
+    在skips数组中第0个位置插入0
+    
+    插入0后累加，得到offesets数组，如
+    [0,2,4,6,8,10,12]
+    """
     offsets = np.insert(skips, 0, 0).cumsum()
+    """
+    把offset回归到0附近
+    [-6,-4,-2,0,2,4,6]
+    """
     offsets -= offsets[len(offsets) / 2]
+    """
+    没看懂，大意：不适用连续照片了，把offset从负数补偿回去（可能考虑首帧情况？）
+    """
     if self.no_duplicates:
       offsets += self.steps/2 * self.skip
     offsets = offsets.astype(np.int)
+    """
+    index 是输入，通过idx求得这组连续图像的id，如id = 1500
+    [1494,1496,1498,1500,1502,1504,1506]
+    """
     idx = index + offsets
+    """
+    if(id<0):id = 0
+    if(id>len-1):id = len-1
+    """
     idx = np.minimum(np.maximum(idx, 0), len(self.dset)-1)
+    """
+    assert condition
+     用来让程序测试这个condition，如果condition为false，那么raise一个AssertionError出来。
+    if not condition:
+    raise AssertionError()
+   
+    """
     assert np.all(idx >= 0), '{:d}'.format(index)
     assert np.all(idx < len(self.dset))
     return idx
@@ -76,15 +129,30 @@ class MF(data.Dataset):
   def __getitem__(self, index):
     """
     :param index: 
-    :return: imgs: STEPS x 3 x H x W
+    :return: imgs: STEPS x 3 x H x W   step:一共跳几次（一共取几张图片）
              poses: STEPS x 7
-             vos: (STEPS-1) x 7 (only if include_vos = True)
+             vos: (STEPS-1) x 7 (only if include_vos = True) [MapNet no this item]
+    """
+    """
+    输入一个index 返回一组idx
     """
     idx = self.get_indices(index)
+    """
+    clip:
+    [(Img1,pos1),(Img2,pos2),(Img3,pos3),....]
+    """
     clip  = [self.dset[i] for i in idx]
-
+    """
+    torch.stack :拼接，和cat不同，因为多拼出来一个维度
+    a = [[1,2,3],[4,5,6]]       dim:(2*3)
+    b = [[7,8,9],[10,11,12]]    dim:(2*3)
+    torch.stack(a,b) = [a,b] = [[[1,2,3],[4,5,6]],[[7,8,9],[10,11,12]]]   dim:(2*2*3)
+    """
     imgs  = torch.stack([c[0] for c in clip], dim=0)
     poses = torch.stack([c[1] for c in clip], dim=0)
+    """
+    pass this if
+    """
     if self.include_vos:
       # vos = calc_vos_simple(poses.unsqueeze(0))[0] if self.train else \
       #   calc_vos_safe(poses.unsqueeze(0))[0]
@@ -93,7 +161,7 @@ class MF(data.Dataset):
         clip = [self.gt_dset[self.dset.gt_idx[i]] for i in idx]
         poses = torch.stack([c[1] for c in clip], dim=0)
       poses = torch.cat((poses, vos), dim=0)
-
+      
     return imgs, poses
 
   def __len__(self):
