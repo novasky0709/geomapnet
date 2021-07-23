@@ -45,6 +45,10 @@ class SevenScenes(data.Dataset):
       np.random.seed(seed)
 
       # directories
+      """
+      expanduser() is for linux OS,change ~/blahblah to /home/usrname/blahblah
+      str_c = join(str_a,str_b) is equivalent to str_c = str_a + str_b
+      """
       base_dir = osp.join(osp.expanduser(data_path), scene)
       data_dir = osp.join('..', 'data', '7Scenes', scene)
 
@@ -54,6 +58,14 @@ class SevenScenes(data.Dataset):
       else:
         split_file = osp.join(base_dir, 'TestSplit.txt')
       with open(split_file, 'r') as f:
+       """
+       split by sequence and take the last element ([-1] stands for the last element) to type of int
+       txt file is like the following:
+       sequence3
+       sequence5
+       and we can seqs get [3,5] after this sentence.
+       
+       """
         seqs = [int(l.split('sequence')[-1]) for l in f if not l.startswith('#')]
 
       # read poses and collect image names
@@ -66,8 +78,14 @@ class SevenScenes(data.Dataset):
       for seq in seqs:
         seq_dir = osp.join(base_dir, 'seq-{:02d}'.format(seq))
         seq_data_dir = osp.join(data_dir, 'seq-{:02d}'.format(seq))
+        """
+        find evey file with str"pose" return the filenames
+        """
         p_filenames = [n for n in os.listdir(osp.join(seq_dir, '.')) if
                        n.find('pose') >= 0]
+        """
+        We dont use real=True in the MapNet
+        """
         if real:
           pose_file = osp.join(data_dir, '{:s}_poses'.format(vo_lib),
                                'seq-{:02d}.txt'.format(seq))
@@ -84,12 +102,37 @@ class SevenScenes(data.Dataset):
           # vo_stats[seq]['R'] = np.eye(3)
           # vo_stats[seq]['t'] = np.zeros(3)
         else:
+         """
+         xrange() is similar to range(), and the difference is xrange() return a generator:
+         >>> range(8)                 
+         [0, 1, 2, 3, 4, 5, 6, 7]
+         >>>xrange(8)
+         xrange(8)
+         >>> list(xrange(8))
+         [0, 1, 2, 3, 4, 5, 6, 7]
+         
+         So, np.array(xrange(len(p_filenames)), dtype=np.int) is a np.array contains int element
+         and the element is from 0 to len(p_filenames)-1 (in the Scene-7-chess is 999)
+         """
           frame_idx = np.array(xrange(len(p_filenames)), dtype=np.int)
+          """
+          load pose and take the [:12] cause[13:16] is [0,0,0,1]
+          .flatten():
+          Return a copy of the array collapsed into one dimension：
+          [ [1,2,3,4]
+            [5,6,7,8]
+            [9,10,11,12] ]
+           to  [1,2,3,4,5,6,7,8,9,10,11,12]
+          """
           pss = [np.loadtxt(osp.join(seq_dir, 'frame-{:06d}.pose.txt'.
             format(i))).flatten()[:12] for i in frame_idx]
           ps[seq] = np.asarray(pss)
           vo_stats[seq] = {'R': np.eye(3), 't': np.zeros(3), 's': 1}
-
+        """
+        hstack :按行拼接
+        vstack：：按列拼接
+         self.gt_idx is an global idx, seq1:0~1000,seq2:1000~2000...
+        """
         self.gt_idx = np.hstack((self.gt_idx, gt_offset+frame_idx))
         gt_offset += len(p_filenames)
         c_imgs = [osp.join(seq_dir, 'frame-{:06d}.color.png'.format(i))
@@ -108,6 +151,9 @@ class SevenScenes(data.Dataset):
         mean_t, std_t = np.loadtxt(pose_stats_filename)
 
       # convert pose to translation + log quaternion
+      """
+      translation is 1*3 matrix and quaternion is 1*4
+      """
       self.poses = np.empty((0, 6))
       for seq in seqs:
         pss = process_poses(poses_in=ps[seq], mean_t=mean_t, std_t=std_t,
@@ -120,6 +166,10 @@ class SevenScenes(data.Dataset):
         img = None
         pose = self.poses[index]
       else:
+       """
+       mode 0 is for rgb Img
+       mode 1 is for rgb-d Img 
+       """
         if self.mode == 0:
           img = None
           while img is None:
@@ -160,7 +210,9 @@ class SevenScenes(data.Dataset):
           img = self.transform(img)
 
       return img, pose
-
+"""
+we define __len__(self) is to tell the script how many (Image,pose) we should read
+"""
     def __len__(self):
       return self.poses.shape[0]
 
